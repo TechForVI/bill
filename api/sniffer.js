@@ -11,36 +11,38 @@ module.exports = async (req, res) => {
   try {
     const response = await axios.get(targetUrl, {
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*'
+      },
+      timeout: 10000
     });
     
     const $ = cheerio.load(response.data);
     const endpoints = [];
 
-    $('script').each((i, el) => {
+    // تمام Scripts، AJAX کالز اور لنکس کو جمع کریں
+    $('script, a, form, link').each((i, el) => {
+      const src = $(el).attr('src') || $(el).attr('href') || $(el).attr('action');
       const content = $(el).html();
-      const matches = content ? content.match(/https?:\/\/[^\s"'`<>]+/g) : null;
-      if (matches) endpoints.push(...matches);
+      
+      if (src && src.startsWith('http')) endpoints.push(src);
+      
+      if (content) {
+        const matches = content.match(/https?:\/\/[^\s"'`<>]+/g);
+        if (matches) endpoints.push(...matches);
+      }
     });
 
-    $('form').each((i, el) => {
-      const action = $(el).attr('action');
-      if (action) endpoints.push(action);
-    });
-
-    const filtered = endpoints.filter(link => 
-      link.includes('api') || 
-      link.includes('download') || 
-      link.includes('convert') || 
-      link.includes('token')
+    // فلٹر کو وسیع کر دیں تاکہ کچھ بھی مس نہ ہو
+    const filtered = [...new Set(endpoints)].filter(link => 
+      !link.includes('google-analytics') && 
+      !link.includes('fonts.googleapis') &&
+      !link.includes('facebook.com')
     );
 
     res.json({
       success: true,
-      website: targetUrl,
-      found_endpoints: [...new Set(filtered)]
+      found_endpoints: filtered.slice(0, 50) // پہلے 50 لنکس دکھائیں
     });
 
   } catch (error) {
