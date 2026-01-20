@@ -1,5 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/scan", "destination": "/api/sniffer.js" }
-  ]
-}
