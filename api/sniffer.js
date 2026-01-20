@@ -1,41 +1,59 @@
 const axios = require('axios');
 
 module.exports = async (req, res) => {
+  // CORS ہینڈلنگ (تاکہ کسی بھی جگہ سے کال ہو سکے)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
   const { targetUrl } = req.query;
-  if (!targetUrl) return res.status(400).json({ error: "URL missing" });
+
+  if (!targetUrl) {
+    return res.status(400).json({ success: false, error: "URL is required" });
+  }
 
   try {
-    // ویب سائٹ کا پورا ٹیکسٹ (Source Code) حاصل کریں
+    // ویب سائٹ لوڈ کرنے کی کوشش
     const response = await axios.get(targetUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 10000
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+      },
+      timeout: 15000 // 15 سیکنڈ کا ٹائم آؤٹ
     });
-    
+
     const html = response.data;
-    const endpoints = new Set();
+    const links = new Set();
 
-    // پیٹرن 1: وہ تمام ڈومینز جو 'api' یا 'convert' سے شروع ہوں
-    const regex1 = /https?:\/\/(?:[a-zA-Z0-9-]+\.)*(?:api|convert|download|stream)[a-zA-Z0-9-.]+\.[a-z]{2,}(?:\/[^\s"'`<>]+)?/g;
+    // 1. تمام مکمل لنکس ڈھونڈیں (Regex)
+    const fullUrlRegex = /https?:\/\/[a-zA-Z0-9.-]+\.[a-z]{2,6}(?:\/[^\s"'`<>]+)?/g;
+    const matches = html.match(fullUrlRegex);
     
-    // پیٹرن 2: جاوا اسکرپٹ کے اندر موجود اینڈ پوائنٹس جو اکثر /api/v1/ کی شکل میں ہوتے ہیں
-    const regex2 = /"(\/api\/[^\s"'`<>]+)"|'(\/api\/[^\s"'`<>]+)'/g;
-
-    let match;
-    while ((match = regex1.exec(html)) !== null) endpoints.add(match[0]);
-    while ((match = regex2.exec(html)) !== null) endpoints.add(match[1] || match[2]);
-
-    // اگر کچھ نہ ملے تو تمام لنکس نکالیں جو .org یا .com پر ختم ہوں
-    if (endpoints.size === 0) {
-       const generalRegex = /https?:\/\/[a-zA-Z0-9.-]+\.(?:org|com|net|io)(?:\/[^\s"'`<>]+)?/g;
-       while ((match = generalRegex.exec(html)) !== null) endpoints.add(match[0]);
+    if (matches) {
+      matches.forEach(link => {
+        // فالتو لنکس کو فلٹر کریں
+        if (!link.includes('google') && !link.includes('facebook') && !link.includes('schema.org')) {
+          links.add(link);
+        }
+      });
     }
 
-    res.json({
+    // 2. مخصوص API پیٹرن تلاش کریں (مثلاً /api/v1/...)
+    const apiPattern = /["'](\/[^"']*api[^"']*)["']/g;
+    let apiMatch;
+    while ((apiMatch = apiPattern.exec(html)) !== null) {
+      links.add(apiMatch[1]);
+    }
+
+    res.status(200).json({
       success: true,
-      found_endpoints: [...endpoints].filter(link => !link.includes('google') && !link.includes('w3.org')).slice(0, 40)
+      found_endpoints: [...links].slice(0, 50)
     });
 
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    // 500 ایرر کے بجائے تفصیل بھیجیں
+    res.status(200).json({
+      success: false,
+      error: "Could not scan website",
+      details: error.message
+    });
   }
 };
