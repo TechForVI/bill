@@ -1,59 +1,56 @@
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-  // CORS ہینڈلنگ (تاکہ کسی بھی جگہ سے کال ہو سکے)
   res.setHeader('Access-Control-Allow-Origin', '*');
-  
   const { targetUrl } = req.query;
-
-  if (!targetUrl) {
-    return res.status(400).json({ success: false, error: "URL is required" });
-  }
+  if (!targetUrl) return res.status(400).json({ error: "URL required" });
 
   try {
-    // ویب سائٹ لوڈ کرنے کی کوشش
     const response = await axios.get(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G960U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-      },
-      timeout: 15000 // 15 سیکنڈ کا ٹائم آؤٹ
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     });
-
-    const html = response.data;
-    const links = new Set();
-
-    // 1. تمام مکمل لنکس ڈھونڈیں (Regex)
-    const fullUrlRegex = /https?:\/\/[a-zA-Z0-9.-]+\.[a-z]{2,6}(?:\/[^\s"'`<>]+)?/g;
-    const matches = html.match(fullUrlRegex);
     
-    if (matches) {
-      matches.forEach(link => {
-        // فالتو لنکس کو فلٹر کریں
-        if (!link.includes('google') && !link.includes('facebook') && !link.includes('schema.org')) {
-          links.add(link);
-        }
-      });
+    const html = response.data;
+    const endpoints = new Set();
+
+    // 1. HTML میں سے تمام لنکس نکالیں
+    const linkRegex = /https?:\/\/[^\s"'`<>]+/g;
+    (html.match(linkRegex) || []).forEach(l => endpoints.add(l));
+
+    // 2. مخصوص اسکرپٹ لنکس کو تلاش کریں (جو اکثر APIs چھپاتے ہیں)
+    const scriptRegex = /<script\s+[^>]*src=["']([^"']+)["']/g;
+    let m;
+    const jsFiles = [];
+    while ((m = scriptRegex.exec(html)) !== null) {
+      let jsUrl = m[1];
+      if (!jsUrl.startsWith('http')) {
+        const base = new URL(targetUrl).origin;
+        jsUrl = new URL(jsUrl, base).href;
+      }
+      jsFiles.push(jsUrl);
     }
 
-    // 2. مخصوص API پیٹرن تلاش کریں (مثلاً /api/v1/...)
-    const apiPattern = /["'](\/[^"']*api[^"']*)["']/g;
-    let apiMatch;
-    while ((apiMatch = apiPattern.exec(html)) !== null) {
-      links.add(apiMatch[1]);
+    // 3. ٹاپ 3 جے ایس فائلوں کو اسکین کریں (زیادہ کرنے سے سرور سلو ہو جاتا ہے)
+    for (let i = 0; i < Math.min(jsFiles.length, 3); i++) {
+      try {
+        const jsRes = await axios.get(jsFiles[i], { timeout: 5000 });
+        const jsLinks = jsRes.data.match(linkRegex);
+        if (jsLinks) jsLinks.forEach(l => endpoints.add(l));
+      } catch (e) {}
     }
 
-    res.status(200).json({
+    // فلٹر: صرف وہ لنکس جو ممکنہ طور پر APIs ہو سکتے ہیں
+    const filtered = [...endpoints].filter(link => 
+      (link.includes('api') || link.includes('convert') || link.includes('download') || link.includes('.org')) &&
+      !link.includes('google') && !link.includes('facebook') && !link.includes('twitter') && !link.includes('w3.org')
+    );
+
+    res.json({
       success: true,
-      found_endpoints: [...links].slice(0, 50)
+      found_endpoints: filtered.slice(0, 50)
     });
 
   } catch (error) {
-    // 500 ایرر کے بجائے تفصیل بھیجیں
-    res.status(200).json({
-      success: false,
-      error: "Could not scan website",
-      details: error.message
-    });
+    res.json({ success: false, error: error.message });
   }
 };
