@@ -15,7 +15,8 @@ app.get('/api/sniffer', async (req, res) => {
     try {
         browser = await puppeteer.launch({
             headless: "new",
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+            // یہاں ہم نے یقینی بنایا ہے کہ یہ آپ کے ریلوے والے ویری ایبل کو استعمال کرے
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -30,12 +31,14 @@ app.get('/api/sniffer', async (req, res) => {
         await page.setRequestInterception(true);
         page.on('request', request => {
             const url = request.url();
-            if (url.includes('api') || url.includes('json') || url.includes('v1') || url.includes('v2')) {
+            // ان فلٹرز کی مدد سے ہم صرف کام کے لنکس نکالتے ہیں
+            if (url.includes('api') || url.includes('json') || url.includes('v1') || url.includes('v2') || url.includes('token')) {
                 interceptedUrls.add(url);
             }
             request.continue();
         });
 
+        // یہاں ہم ویب سائٹ کو لوڈ ہونے کا وقت دیتے ہیں
         await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
         res.json({
