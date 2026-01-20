@@ -15,13 +15,14 @@ app.get('/api/sniffer', async (req, res) => {
     try {
         browser = await puppeteer.launch({
             headless: "new",
-            // یہ لائن ویری ایبل سے راستہ اٹھائے گی، اگر وہ نہ ملا تو سسٹم کے عام راستے چیک کرے گی
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome' || '/usr/bin/chromium',
+            // یہ لائن اب براہ راست سسٹم کے انسٹالڈ براؤزر کو اٹھائے گی
+            executablePath: '/usr/bin/google-chrome', 
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--single-process'
+                '--single-process',
+                '--no-zygote'
             ]
         });
 
@@ -31,8 +32,7 @@ app.get('/api/sniffer', async (req, res) => {
         await page.setRequestInterception(true);
         page.on('request', request => {
             const url = request.url();
-            // بجلی کے بلوں کے لیے مخصوص فلٹرز
-            if (url.includes('api') || url.includes('json') || url.includes('v1') || url.includes('v2') || url.includes('token') || url.includes('fetch')) {
+            if (url.includes('api') || url.includes('json') || url.includes('token') || url.includes('fetch')) {
                 interceptedUrls.add(url);
             }
             request.continue();
@@ -46,7 +46,7 @@ app.get('/api/sniffer', async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: "Browser Error: " + error.message });
     } finally {
         if (browser) await browser.close();
     }
