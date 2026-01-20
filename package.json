@@ -1,7 +1,6 @@
 {
   "name": "api-sniffer-pro",
   "version": "1.0.0",
-  "description": "Advanced API Sniffer using Puppeteer Stealth",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
