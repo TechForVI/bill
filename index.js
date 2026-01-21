@@ -15,15 +15,8 @@ app.get('/api/sniffer', async (req, res) => {
     try {
         browser = await puppeteer.launch({
             headless: "new",
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--single-process',
-                '--no-zygote'
-            ]
+            executablePath: "/usr/bin/chromium",
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--single-process']
         });
 
         const page = await browser.newPage();
@@ -32,7 +25,7 @@ app.get('/api/sniffer', async (req, res) => {
         await page.setRequestInterception(true);
         page.on('request', request => {
             const url = request.url();
-            if (url.includes('api') || url.includes('json') || url.includes('token') || url.includes('fetch')) {
+            if (url.includes('api') || url.includes('json') || url.includes('token')) {
                 interceptedUrls.add(url);
             }
             request.continue();
@@ -40,13 +33,9 @@ app.get('/api/sniffer', async (req, res) => {
 
         await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
-        res.json({
-            success: true,
-            found_endpoints: [...interceptedUrls]
-        });
-
+        res.json({ success: true, found_endpoints: [...interceptedUrls] });
     } catch (error) {
-        res.status(500).json({ success: false, error: "Browser Error: " + error.message });
+        res.status(500).json({ success: false, error: error.message });
     } finally {
         if (browser) await browser.close();
     }
