@@ -5,71 +5,51 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// اینٹی بوٹ ڈیٹیکشن کے لیے اسٹیلتھ پلگ ان کا استعمال
 puppeteer.use(StealthPlugin());
 
 app.get('/api/sniffer', async (req, res) => {
     const { targetUrl } = req.query;
-    
-    if (!targetUrl) {
-        return res.status(400).json({ error: "URL is required. Example: /api/sniffer?targetUrl=https://example.com" });
-    }
+    if (!targetUrl) return res.status(400).json({ error: "URL is required" });
 
     let browser = null;
     try {
         browser = await puppeteer.launch({
             headless: "new",
-            // یہ لائن انوائرمنٹ ویری ایبل سے خود بخود پاتھ اٹھا لے گی
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable', 
+            // ریلوے پر کرومیم کا راستہ
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--single-process',
-                '--no-zygote'
+                '--single-process'
             ]
         });
 
         const page = await browser.newPage();
         const interceptedUrls = new Set();
 
-        // نیٹ ورک ریکوسٹس کو مانیٹر کرنا
         await page.setRequestInterception(true);
         page.on('request', request => {
             const url = request.url();
-            // صرف اہم اینڈ پوائنٹس کو فلٹر کرنا
-            if (url.includes('api') || url.includes('json') || url.includes('token') || url.includes('fetch')) {
+            if (url.includes('api') || url.includes('json') || url.includes('token')) {
                 interceptedUrls.add(url);
             }
             request.continue();
         });
 
-        // ویب سائٹ پر جانا
-        await page.goto(targetUrl, { 
-            waitUntil: 'networkidle2', 
-            timeout: 60000 
-        });
+        await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
-        res.json({
-            success: true,
-            target: targetUrl,
-            found_endpoints: [...interceptedUrls]
-        });
+        res.json({ success: true, found_endpoints: [...interceptedUrls] });
 
     } catch (error) {
-        console.error("Browser Error:", error.message);
-        res.status(500).json({ 
-            success: false, 
-            error: "Browser Error: " + error.message 
-        });
+        res.status(500).json({ success: false, error: "Browser Error: " + error.message });
     } finally {
-        if (browser) {
-            await browser.close();
-        }
+        if (browser) await browser.close();
     }
 });
 
-app.listen(port, () => {
+// 0.0.0.0 ریلوے کے لیے بہت ضروری ہے
+app.listen(port, '0.0.0.0', () => {
     console.log(`Server is running on port ${port}`);
 });
