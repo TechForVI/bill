@@ -15,14 +15,14 @@ app.get('/api/sniffer', async (req, res) => {
     try {
         browser = await puppeteer.launch({
             headless: "new",
-            // ریلوے پر کرومیم کا پاتھ
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--single-process'
+                '--single-process',
+                '--no-zygote'
             ]
         });
 
@@ -32,7 +32,6 @@ app.get('/api/sniffer', async (req, res) => {
         await page.setRequestInterception(true);
         page.on('request', request => {
             const url = request.url();
-            // اہم اینڈ پوائنٹس کو فلٹر کرنا
             if (url.includes('api') || url.includes('json') || url.includes('token') || url.includes('fetch')) {
                 interceptedUrls.add(url);
             }
@@ -53,7 +52,6 @@ app.get('/api/sniffer', async (req, res) => {
     }
 });
 
-// ریلوے پر ایکسیس کے لیے '0.0.0.0' لازمی ہے
 app.listen(port, '0.0.0.0', () => {
     console.log(`Server is running on port ${port}`);
 });
